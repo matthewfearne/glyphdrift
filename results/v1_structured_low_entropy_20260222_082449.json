@@ -1,0 +1,63 @@
+{
+  "version": "v1",
+  "scenario": "structured_low_entropy",
+  "episodes": 20,
+  "generations": 1000,
+  "timestamp": "20260222_082449",
+  "final_shannon": {
+    "mean": 4.935837644543243,
+    "std": 0.0355314104186202,
+    "ci_95": 0.015572327210365887,
+    "min": 4.883380607184515,
+    "max": 5.012071179071178,
+    "n": 20
+  },
+  "mean_shannon": {
+    "mean": 4.924852831930694,
+    "std": 0.0022632267651446075,
+    "ci_95": 0.0009919028634906176,
+    "min": 4.920945927411402,
+    "max": 4.9292091081274565,
+    "n": 20
+  },
+  "final_diversity": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci_95": 0.0,
+    "min": 1.0,
+    "max": 1.0,
+    "n": 20
+  },
+  "mean_diversity": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci_95": 0.0,
+    "min": 1.0,
+    "max": 1.0,
+    "n": 20
+  },
+  "final_unique_glyphs": {
+    "mean": 40.0,
+    "std": 0.0,
+    "ci_95": 0.0,
+    "min": 40.0,
+    "max": 40.0,
+    "n": 20
+  },
+  "final_unique_sequences": {
+    "mean": 100.0,
+    "std": 0.0,
+    "ci_95": 0.0,
+    "min": 100.0,
+    "max": 100.0,
+    "n": 20
+  },
+  "template_adherence": {
+    "mean": 1.0,
+    "std": 0.0,
+    "ci_95": 0.0,
+    "min": 1.0,
+    "max": 1.0,
+    "n": 20
+  }
+}

@@ -1,0 +1,247 @@
+"""Named scenario configurations for GlyphDrift."""
+
+from __future__ import annotations
+
+from .config import GlyphDriftConfig
+
+# ── v0 scenarios ─────────────────────────────────────────────────────
+
+SCENARIOS: dict[str, GlyphDriftConfig] = {
+    # v0: Glyph atoms — baseline
+    "base": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+    ),
+    "high_entropy": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.9,
+    ),
+    "low_entropy": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.1,
+    ),
+    "large_pop": GlyphDriftConfig(
+        population_size=500,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+    ),
+
+    # ── v1 scenarios: Lexicon ────────────────────────────────────────
+    "structured": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_lexicon=True,
+    ),
+    "structured_high_entropy": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.9,
+        use_lexicon=True,
+    ),
+    "structured_low_entropy": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.1,
+        use_lexicon=True,
+    ),
+
+    # ── v2 scenarios: Dialects ─────────────────────────────────────────
+    "four_dialects": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_dialects=True,
+        dialect_mixing=0.1,
+    ),
+    "high_mixing": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_dialects=True,
+        dialect_mixing=0.5,
+    ),
+    "isolated": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_dialects=True,
+        dialect_mixing=0.0,
+    ),
+
+    # ── v3 scenarios: Evolution ────────────────────────────────────────
+    "evolution_base": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+    ),
+    "high_mutation": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.3,
+        tournament_size=3,
+        crossover_rate=0.5,
+    ),
+    "low_mutation": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.02,
+        tournament_size=3,
+        crossover_rate=0.5,
+    ),
+    "large_tournament": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=7,
+        crossover_rate=0.5,
+    ),
+    "no_selection": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=1,  # Tournament size 1 = random selection (no pressure)
+        crossover_rate=0.5,
+    ),
+
+    # ── v4 scenarios: Chaotic Drift ────────────────────────────────────
+    "chaotic_drift": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=3.9,
+        logistic_x0=0.5,
+    ),
+    "periodic_drift": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=3.2,  # Period-4 cycle
+        logistic_x0=0.5,
+    ),
+    "stable_drift": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=2.5,  # Fixed point — effectively constant mutation
+        logistic_x0=0.5,
+    ),
+    "entropy_storms": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=3.9,
+        logistic_x0=0.5,
+        storm_interval=100,  # Force perturbation every 100 generations
+    ),
+
+    # ── v5 scenarios: Grammar Emergence ────────────────────────────────
+    "grammar_base": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=3.9,
+        logistic_x0=0.5,
+        track_grammar=True,
+    ),
+    "grammar_high_pressure": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=7,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=3.9,
+        logistic_x0=0.5,
+        track_grammar=True,
+    ),
+    "grammar_no_pressure": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=1,  # No selection pressure
+        crossover_rate=0.5,
+        track_grammar=True,
+    ),
+    "grammar_storms": GlyphDriftConfig(
+        population_size=100,
+        sequence_length=10,
+        generations=1000,
+        entropy=0.5,
+        use_evolution=True,
+        mutation_rate=0.1,
+        tournament_size=3,
+        crossover_rate=0.5,
+        use_chaotic_drift=True,
+        logistic_r=3.9,
+        logistic_x0=0.5,
+        storm_interval=100,
+        track_grammar=True,
+    ),
+}
