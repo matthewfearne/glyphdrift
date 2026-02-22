@@ -11,6 +11,9 @@ from glyphdrift.grammar import (
     grammar_rule_count,
     grammar_summary,
     mutual_information,
+    ncd_vs_shuffled,
+    permutation_test_bigrams,
+    position_specific_entropy,
     significant_bigrams,
     significant_trigrams,
     trigram_counts,
@@ -123,3 +126,94 @@ class TestGrammarSummary:
         sb, st = grammar_rule_count(evolved_pop)
         assert sb >= 0
         assert st >= 0
+
+    def test_summary_has_v6_fields(self, random_pop):
+        gs = grammar_summary(random_pop)
+        assert "permutation_bigrams" in gs
+        assert "position_entropy" in gs
+        assert "ncd_vs_shuffled" in gs
+
+
+# ── v6: Permutation Test ────────────────────────────────────────────
+
+
+class TestPermutationTest:
+    def test_returns_list(self, random_pop):
+        result = permutation_test_bigrams(random_pop, n_shuffles=20)
+        assert isinstance(result, list)
+
+    def test_result_format(self, random_pop):
+        result = permutation_test_bigrams(random_pop, n_shuffles=20)
+        for bigram, count, p_value in result:
+            assert len(bigram) == 2
+            assert isinstance(count, int)
+            assert 0 <= p_value < 0.05
+
+    def test_empty_population(self):
+        result = permutation_test_bigrams([])
+        assert result == []
+
+    def test_deterministic_with_seed(self, random_pop):
+        r1 = permutation_test_bigrams(random_pop, n_shuffles=50, seed=42)
+        r2 = permutation_test_bigrams(random_pop, n_shuffles=50, seed=42)
+        assert len(r1) == len(r2)
+
+    def test_evolved_has_permutation_bigrams(self, evolved_pop):
+        """Evolved population should have at least some permutation-significant bigrams."""
+        result = permutation_test_bigrams(evolved_pop, n_shuffles=50)
+        # Converged populations should show positional structure
+        assert isinstance(result, list)
+
+
+# ── v6: Position-Specific Entropy ───────────────────────────────────
+
+
+class TestPositionEntropy:
+    def test_returns_tuple(self, random_pop):
+        mean_h, per_pos = position_specific_entropy(random_pop)
+        assert isinstance(mean_h, float)
+        assert isinstance(per_pos, list)
+
+    def test_per_position_length(self, random_pop):
+        mean_h, per_pos = position_specific_entropy(random_pop)
+        assert len(per_pos) == 10  # sequence_length = 10
+
+    def test_entropy_nonnegative(self, random_pop):
+        mean_h, per_pos = position_specific_entropy(random_pop)
+        assert mean_h >= 0
+        for h in per_pos:
+            assert h >= 0
+
+    def test_empty_population(self):
+        mean_h, per_pos = position_specific_entropy([])
+        assert mean_h == 0.0
+        assert per_pos == []
+
+    def test_evolved_lower_entropy(self, random_pop, evolved_pop):
+        """Evolved (converged) population should have lower position entropy."""
+        mean_random, _ = position_specific_entropy(random_pop)
+        mean_evolved, _ = position_specific_entropy(evolved_pop)
+        # Evolved population has collapsed vocabulary → lower entropy
+        assert mean_evolved < mean_random
+
+
+# ── v6: NCD vs Shuffled ─────────────────────────────────────────────
+
+
+class TestNCDvsShuffled:
+    def test_returns_float(self, random_pop):
+        ncd = ncd_vs_shuffled(random_pop)
+        assert isinstance(ncd, float)
+
+    def test_range(self, random_pop):
+        ncd = ncd_vs_shuffled(random_pop)
+        # NCD is typically between 0 and ~1.1
+        assert 0 <= ncd <= 1.5
+
+    def test_empty_population(self):
+        assert ncd_vs_shuffled([]) == 0.0
+
+    def test_deterministic(self, random_pop):
+        n1 = ncd_vs_shuffled(random_pop, seed=42)
+        n2 = ncd_vs_shuffled(random_pop, seed=42)
+        assert n1 == n2

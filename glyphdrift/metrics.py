@@ -74,6 +74,11 @@ class RunMetrics:
     mutual_information: float = 0.0
     compression_ratio: float = 1.0
 
+    # v6 grammar metrics
+    permutation_bigrams: int = 0
+    position_entropy: float = 0.0
+    ncd_vs_shuffled: float = 0.0
+
     # Time series (for plotting)
     entropy_series: list[float] = field(default_factory=list)
     diversity_series: list[float] = field(default_factory=list)

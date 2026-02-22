@@ -1,7 +1,8 @@
-"""Evolutionary operators for GlyphDrift (v3).
+"""Evolutionary operators for GlyphDrift (v3+).
 
-Tournament selection, bigram-coherence fitness, mutation, crossover.
-This is where random generation becomes an evolutionary system.
+Tournament selection, fitness functions, mutation, crossover.
+v3: bigram-coherence fitness (circular — self-referential).
+v6: sliding-window fitness (non-circular — scored against previous generation).
 """
 
 from __future__ import annotations
@@ -45,10 +46,53 @@ def fitness_bigram_coherence(
     return score
 
 
+def fitness_sliding_window(
+    sequence: list[Glyph],
+    prev_bigrams: Counter[tuple[str, str]],
+) -> float:
+    """Fitness scored against PREVIOUS generation's bigram distribution.
+
+    Non-circular: sequences are rewarded for matching established patterns,
+    not patterns they help create. Breaks the self-referential feedback loop
+    of bigram_coherence.
+    """
+    if len(sequence) < 2:
+        return 0.0
+    score = 0.0
+    for i in range(len(sequence) - 1):
+        bigram = (sequence[i].symbol, sequence[i + 1].symbol)
+        score += prev_bigrams[bigram]
+    return score
+
+
+def uniform_bigram_prior(
+    alphabet: list[Glyph],
+    pop_size: int,
+    seq_length: int,
+) -> Counter[tuple[str, str]]:
+    """Uniform prior for first generation: all bigrams count = 1.
+
+    Gives every bigram combination a baseline count so the first generation
+    has something to be scored against.
+    """
+    prior: Counter[tuple[str, str]] = Counter()
+    for g1 in alphabet:
+        for g2 in alphabet:
+            prior[(g1.symbol, g2.symbol)] = 1
+    return prior
+
+
 def compute_population_fitness(
     population: list[list[Glyph]],
+    prev_bigrams: Counter[tuple[str, str]] | None = None,
 ) -> list[float]:
-    """Compute fitness for every sequence in the population."""
+    """Compute fitness for every sequence in the population.
+
+    If prev_bigrams is provided, uses sliding window (v6).
+    Otherwise uses circular bigram coherence (v3-v5).
+    """
+    if prev_bigrams is not None:
+        return [fitness_sliding_window(seq, prev_bigrams) for seq in population]
     bg = bigram_frequencies(population)
     return [fitness_bigram_coherence(seq, bg) for seq in population]
 
@@ -174,12 +218,16 @@ def evolve_generation(
     tournament_size: int,
     crossover_rate: float,
     target_length: int,
+    prev_bigrams: Counter[tuple[str, str]] | None = None,
 ) -> list[list[Glyph]]:
     """Produce the next generation via selection, crossover, and mutation.
 
+    If prev_bigrams is provided, uses sliding window fitness (v6).
+    Otherwise uses circular bigram coherence (v3-v5).
+
     Returns a new population of the same size.
     """
-    fitnesses = compute_population_fitness(population)
+    fitnesses = compute_population_fitness(population, prev_bigrams)
     pop_size = len(population)
     new_pop: list[list[Glyph]] = []
 

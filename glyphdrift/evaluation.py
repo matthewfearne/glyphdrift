@@ -75,6 +75,11 @@ class EvaluationResult:
     mutual_information_metric: MetricSummary | None = None
     compression_ratio: MetricSummary | None = None
 
+    # v6 grammar metrics
+    permutation_bigrams: MetricSummary | None = None
+    position_entropy: MetricSummary | None = None
+    ncd_vs_shuffled: MetricSummary | None = None
+
 
 def _summarize(values: list[float]) -> MetricSummary:
     """Compute mean +/- 95% CI."""
@@ -126,6 +131,7 @@ def evaluate(
             logistic_x0=config.logistic_x0,
             storm_interval=config.storm_interval,
             track_grammar=config.track_grammar,
+            use_sliding_window=config.use_sliding_window,
         )
         run = run_simulation(cfg, scenario=scenario_name)
         all_runs.append(run)
@@ -188,6 +194,15 @@ def evaluate(
         compression_ratio=_summarize(
             [r.compression_ratio for r in all_runs]
         ) if config.track_grammar else None,
+        permutation_bigrams=_summarize(
+            [float(r.permutation_bigrams) for r in all_runs]
+        ) if config.track_grammar else None,
+        position_entropy=_summarize(
+            [r.position_entropy for r in all_runs]
+        ) if config.track_grammar else None,
+        ncd_vs_shuffled=_summarize(
+            [r.ncd_vs_shuffled for r in all_runs]
+        ) if config.track_grammar else None,
     )
 
     # Print table
@@ -224,6 +239,9 @@ def _print_table(result: EvaluationResult) -> None:
         ("sig_trigrams", result.significant_trigrams),
         ("mutual_info", result.mutual_information_metric),
         ("compression_ratio", result.compression_ratio),
+        ("perm_bigrams", result.permutation_bigrams),
+        ("position_entropy", result.position_entropy),
+        ("ncd_vs_shuffled", result.ncd_vs_shuffled),
     ]
     for name, summary in rows:
         if summary:
@@ -252,6 +270,7 @@ def _save_result(result: EvaluationResult, save_dir: str) -> None:
         "mean_mutation_rate", "mutation_rate_variance",
         "significant_bigrams", "significant_trigrams",
         "mutual_information_metric", "compression_ratio",
+        "permutation_bigrams", "position_entropy", "ncd_vs_shuffled",
     ]:
         summary = getattr(result, attr)
         if summary:

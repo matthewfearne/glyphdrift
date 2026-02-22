@@ -322,3 +322,94 @@ under the null hypothesis of independent glyph positions.
    vocabulary convergence and sequence-level repetition.
 
 ---
+
+## v6 — Non-Circular Fitness + Improved Grammar Detection
+
+**Two fixes in one version:**
+
+### 6a. Sliding Window Fitness
+
+**Problem (v3-v5):** `bigram_coherence` computes bigram frequencies FROM the current
+population, then scores each sequence against those same frequencies. Self-referential —
+sequences reward the bigram patterns they help create.
+
+**Fix:** Score generation t against generation t-1's bigram distribution. First generation
+uses uniform prior (all bigrams count=1). Each subsequent generation scored against its
+predecessor's bigrams. Breaks the self-referential feedback loop.
+
+### 6b. Permutation-Based Grammar Detection
+
+**Problem (v5):** Chi-squared uses `P(a)*P(b)` as expected frequency. In converged
+populations, the marginals already encode the structure, so everything looks "expected."
+
+**Fix:** Permutation test — shuffle glyph positions within each sequence (destroying
+positional structure but preserving marginal frequencies). Compare observed bigram counts
+against 100 shuffled versions. Also added position-specific entropy and Normalized
+Compression Distance (NCD).
+
+| Metric | sliding_base | sliding_high | no_select | circular_compare |
+|--------|-------------|-------------|-----------|-----------------|
+| | sliding+drift+t=3 | sliding+drift+t=7 | sliding+t=1 | circular+drift+t=3 |
+| shannon_entropy | 0.824 ± 0.045 | 0.771 ± 0.136 | 5.199 ± 0.013 | 0.858 ± 0.098 |
+| diversity_ratio | 0.563 ± 0.029 | 0.510 ± 0.020 | 0.982 ± 0.005 | 0.560 ± 0.028 |
+| unique_glyphs | 35.0 ± 1.0 | 34.1 ± 1.1 | 40.0 ± 0.0 | 35.0 ± 1.1 |
+| unique_sequences | 56.3 ± 2.9 | 50.9 ± 2.0 | 98.2 ± 0.5 | 55.9 ± 2.8 |
+| mean_fitness | 5797 ± 16 | 5962 ± 490 | 15.9 ± 0.04 | 5669 ± 338 |
+| final_fitness | 5644 ± 171 | 6073 ± 418 | 15.5 ± 0.4 | 6181 ± 420 |
+| sig_bigrams (chi2) | 0.0 ± 0.0 | 0.15 ± 0.29 | 14.0 ± 1.9 | 0.1 ± 0.2 |
+| mutual_info | 0.063 ± 0.008 | 0.111 ± 0.142 | 1.537 ± 0.028 | 0.088 ± 0.053 |
+| compression_ratio | 0.073 ± 0.003 | 0.066 ± 0.002 | 0.296 ± 0.002 | 0.073 ± 0.003 |
+| **perm_bigrams** | **0.55 ± 0.30** | **0.35 ± 0.59** | **70.2 ± 3.3** | **0.55 ± 0.36** |
+| **position_entropy** | **0.646 ± 0.037** | **0.550 ± 0.024** | **4.284 ± 0.025** | **0.641 ± 0.037** |
+| **ncd_vs_shuffled** | **0.745 ± 0.009** | **0.738 ± 0.022** | **0.870 ± 0.004** | **0.749 ± 0.015** |
+
+**Sliding vs Circular (same selection pressure, t=3):**
+
+| Metric | Circular (v5-style) | Sliding Window (v6) | Change |
+|--------|-------------------|-------------------|--------|
+| shannon_entropy | 0.858 | 0.824 | **-4%** |
+| mean_fitness | 5669 | 5797 | **+2%** |
+| final_fitness | 6181 | 5644 | **-9%** |
+| fitness CI width | ±420 | ±171 | **-59% (more stable)** |
+
+**Observations:**
+
+1. **Sliding window produces slightly more convergence.** Shannon drops 4% (0.858→0.824).
+   Without self-referential inflation, the fitness landscape is less "flat" — genuine
+   pattern matching against the previous generation's distribution provides a cleaner
+   selection signal.
+
+2. **Fitness is MORE stable with sliding window.** Final fitness CI narrows dramatically
+   (±420 → ±171). Circular fitness inflates scores through self-reference, creating
+   artificial variance. Sliding window produces more consistent evolutionary trajectories.
+
+3. **BUT: the grammar paradox persists.** Permutation test finds 0.55 significant bigrams
+   in evolved populations (t=3) vs 70.2 in the no-selection control. This is the same
+   pattern as v5's chi-squared result. The problem isn't circular fitness — it's that
+   selection pressure itself drives convergence that destroys positional grammar.
+
+4. **The permutation test IS working correctly** — the no-selection control shows 70
+   permutation-significant bigrams where chi-squared only found 14. The permutation test
+   is 5x more sensitive. It just has nothing to find in converged populations.
+
+5. **Position-specific entropy reveals the convergence mechanism.** Evolved: 0.646 bits
+   (out of max ~5.3). No-selection: 4.284 bits. Evolution doesn't just reduce which glyphs
+   appear — it constrains which glyphs appear WHERE. Position entropy of 0.6 means each
+   position is dominated by ~1-2 glyphs, creating a rigid "template" from convergence
+   rather than design.
+
+6. **NCD confirms structure exists.** Evolved populations have NCD ~0.74 vs shuffled version.
+   Random populations: NCD ~0.87. Lower NCD in evolved populations means they're MORE
+   similar to their shuffled versions — because the sequences are already so homogeneous
+   that shuffling doesn't change much. The structure is "everywhere" (global convergence),
+   not "somewhere" (positional grammar).
+
+7. **The fundamental insight deepens:** What evolves isn't grammar (positional rules) — it's
+   VOCABULARY (frequency convergence). The population converges on a small set of dominant
+   glyphs at every position. This is compressible (ratio ~0.07), NCD-detectable, and
+   entropically measurable, but it's not grammar in the linguistic sense. Getting genuine
+   positional structure may require fitness functions that explicitly reward positional
+   diversity, or multi-population schemes where different subgroups develop different
+   "roles" for different positions.
+
+---

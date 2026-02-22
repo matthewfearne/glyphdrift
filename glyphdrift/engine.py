@@ -11,7 +11,12 @@ from .dialect import (
     mean_pairwise_jaccard,
 )
 from .drift import LogisticDrift
-from .evolution import compute_population_fitness, evolve_generation
+from .evolution import (
+    bigram_frequencies,
+    compute_population_fitness,
+    evolve_generation,
+    uniform_bigram_prior,
+)
 from .glyph import DEFAULT_ALPHABET, Glyph, generate_population
 from .grammar import grammar_summary
 from .lexicon import Lexicon, generate_structured_population, template_adherence_rate
@@ -86,6 +91,13 @@ def run_simulation(
             storm_interval=config.storm_interval,
         )
 
+    # v6: Sliding window fitness — track previous generation's bigrams
+    prev_bigrams = None
+    if config.use_sliding_window and config.use_evolution:
+        prev_bigrams = uniform_bigram_prior(
+            DEFAULT_ALPHABET, config.population_size, config.sequence_length,
+        )
+
     for gen in range(n_gens):
         metrics = compute_generation_metrics(population, gen)
         gen_metrics.append(metrics)
@@ -94,18 +106,31 @@ def run_simulation(
 
         if config.use_evolution:
             # Track mean fitness
-            fitnesses = compute_population_fitness(population)
+            fitnesses = compute_population_fitness(
+                population, prev_bigrams if config.use_sliding_window else None,
+            )
             fitness_series.append(float(np.mean(fitnesses)))
 
             # Determine mutation rate (constant or chaotic)
             mut_rate = drift.step(gen) if drift else config.mutation_rate
 
-            # Evolve to next generation
+            # v6: Snapshot current gen's bigrams for NEXT iteration's reference
+            current_bigrams = None
+            if config.use_sliding_window:
+                current_bigrams = bigram_frequencies(population)
+
+            # Evolve to next generation (using prev gen's bigrams, NOT current)
             population = evolve_generation(
                 rng, population, DEFAULT_ALPHABET,
                 mut_rate, config.tournament_size,
                 config.crossover_rate, config.sequence_length,
+                prev_bigrams if config.use_sliding_window else None,
             )
+
+            # Update prev_bigrams AFTER evolving — gen t's bigrams
+            # become the reference for gen t+1's selection
+            if config.use_sliding_window:
+                prev_bigrams = current_bigrams
         else:
             # No evolution: regenerate each generation (i.i.d. sampling)
             population, dialect_assignments, foreign_frac = _generate_pop(
@@ -155,5 +180,9 @@ def run_simulation(
         result.significant_trigrams = int(gs["significant_trigrams"])
         result.mutual_information = gs["mutual_information"]
         result.compression_ratio = gs["compression_ratio"]
+        # v6 grammar metrics
+        result.permutation_bigrams = int(gs["permutation_bigrams"])
+        result.position_entropy = gs["position_entropy"]
+        result.ncd_vs_shuffled = gs["ncd_vs_shuffled"]
 
     return result

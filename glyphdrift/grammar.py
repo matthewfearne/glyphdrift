@@ -204,6 +204,138 @@ def compression_ratio(population: list[list[Glyph]]) -> float:
     return len(compressed) / raw_size
 
 
+# ── v6: Improved Grammar Detection ────────────────────────────────────
+
+
+def _shuffle_positions(
+    rng: np.random.Generator,
+    population: list[list[Glyph]],
+) -> list[list[Glyph]]:
+    """Shuffle glyph positions within each sequence.
+
+    Preserves marginal frequencies (which glyphs appear) but destroys
+    positional structure (which glyphs appear WHERE).
+    """
+    shuffled: list[list[Glyph]] = []
+    for seq in population:
+        s = list(seq)
+        rng.shuffle(s)
+        shuffled.append(s)
+    return shuffled
+
+
+def permutation_test_bigrams(
+    population: list[list[Glyph]],
+    n_shuffles: int = 100,
+    seed: int = 0,
+) -> list[tuple[tuple[str, str], int, float]]:
+    """Find bigrams significant by permutation test.
+
+    For each bigram, compare observed count against distribution from
+    N shuffled versions of the population. Shuffling destroys positional
+    structure but preserves marginal frequencies.
+
+    Returns list of (bigram, observed_count, p_value) for bigrams with p < 0.05,
+    sorted by p_value ascending.
+    """
+    rng = np.random.default_rng(seed)
+    observed = bigram_counts(population)
+    if not observed:
+        return []
+
+    # Generate null distribution from shuffled populations
+    null_counts: dict[tuple[str, str], list[int]] = {bg: [] for bg in observed}
+    for _ in range(n_shuffles):
+        shuffled = _shuffle_positions(rng, population)
+        sc = bigram_counts(shuffled)
+        for bg in observed:
+            null_counts[bg].append(sc.get(bg, 0))
+
+    # Test each observed bigram against its null distribution
+    significant: list[tuple[tuple[str, str], int, float]] = []
+    for bg, obs_count in observed.items():
+        null = sorted(null_counts[bg])
+        # p-value: fraction of null counts >= observed
+        n_ge = sum(1 for n in null if n >= obs_count)
+        p_value = n_ge / n_shuffles
+        if p_value < 0.05 and obs_count > 0:
+            significant.append((bg, obs_count, p_value))
+
+    significant.sort(key=lambda x: x[2])
+    return significant
+
+
+def position_specific_entropy(
+    population: list[list[Glyph]],
+) -> tuple[float, list[float]]:
+    """Compute Shannon entropy at each sequence position independently.
+
+    Returns (mean_entropy, entropy_per_position).
+
+    Structured populations have lower entropy at "template" positions
+    (positions dominated by specific roles/glyphs). Random populations
+    have high entropy at all positions.
+    """
+    if not population or not population[0]:
+        return 0.0, []
+
+    seq_len = len(population[0])
+    entropies: list[float] = []
+
+    for pos in range(seq_len):
+        counts = Counter(
+            seq[pos].symbol for seq in population if pos < len(seq)
+        )
+        total = sum(counts.values())
+        if total == 0:
+            entropies.append(0.0)
+            continue
+        probs = np.array(list(counts.values()), dtype=np.float64) / total
+        h = -float(np.sum(probs * np.log2(probs + 1e-10)))
+        entropies.append(h)
+
+    mean_h = float(np.mean(entropies)) if entropies else 0.0
+    return mean_h, entropies
+
+
+def ncd_vs_shuffled(
+    population: list[list[Glyph]],
+    seed: int = 0,
+) -> float:
+    """Normalized Compression Distance between population and shuffled version.
+
+    NCD(x, y) = (C(xy) - min(C(x), C(y))) / max(C(x), C(y))
+
+    Where C(x) is compressed size. Lower NCD = more similar structure.
+    Structured populations differ more from their shuffled versions (higher NCD).
+    Random populations are similar to shuffled versions (lower NCD).
+    """
+    if not population:
+        return 0.0
+
+    rng = np.random.default_rng(seed)
+    shuffled = _shuffle_positions(rng, population)
+
+    def _encode(pop: list[list[Glyph]]) -> bytes:
+        return "\n".join(
+            " ".join(g.symbol for g in seq) for seq in pop
+        ).encode("utf-8")
+
+    x = _encode(population)
+    y = _encode(shuffled)
+    xy = x + b"\n" + y
+
+    cx = len(gzip.compress(x, compresslevel=9))
+    cy = len(gzip.compress(y, compresslevel=9))
+    cxy = len(gzip.compress(xy, compresslevel=9))
+
+    denominator = max(cx, cy)
+    if denominator == 0:
+        return 0.0
+
+    return (cxy - min(cx, cy)) / denominator
+
+
 def grammar_summary(population: list[list[Glyph]]) -> dict[str, float]:
     """Compute all grammar metrics for a population.
 
@@ -219,9 +351,17 @@ def grammar_summary(population: list[list[Glyph]]) -> dict[str, float]:
     mi = mutual_information(population)
     cr = compression_ratio(population)
 
+    # v6 metrics
+    perm_bg = permutation_test_bigrams(population)
+    pos_h, pos_h_list = position_specific_entropy(population)
+    ncd = ncd_vs_shuffled(population)
+
     return {
         "significant_bigrams": float(len(sb)),
         "significant_trigrams": float(len(st)),
         "mutual_information": mi,
         "compression_ratio": cr,
+        "permutation_bigrams": float(len(perm_bg)),
+        "position_entropy": pos_h,
+        "ncd_vs_shuffled": ncd,
     }

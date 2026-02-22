@@ -8,11 +8,13 @@ from glyphdrift.evolution import (
     compute_population_fitness,
     evolve_generation,
     fitness_bigram_coherence,
+    fitness_sliding_window,
     mutate,
     mutate_deletion,
     mutate_insertion,
     mutate_substitution,
     tournament_select,
+    uniform_bigram_prior,
     uniform_crossover,
 )
 from glyphdrift.glyph import DEFAULT_ALPHABET, Glyph, Role, generate_population
@@ -185,3 +187,98 @@ class TestEvolveGeneration:
         unique = len(set(tuple(g.symbol for g in s) for s in pop))
         # With strong selection and low mutation, diversity should drop below 100%
         assert unique < 100
+
+
+# ── v6: Sliding Window Fitness ──────────────────────────────────────
+
+
+class TestUniformBigramPrior:
+    def test_has_all_bigram_pairs(self):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 100, 10)
+        n = len(DEFAULT_ALPHABET)
+        assert len(prior) == n * n
+
+    def test_all_counts_equal_one(self):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 100, 10)
+        assert all(v == 1 for v in prior.values())
+
+    def test_uses_symbols(self):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 100, 10)
+        for (a, b) in prior:
+            assert isinstance(a, str)
+            assert isinstance(b, str)
+
+
+class TestSlidingWindowFitness:
+    def test_nonnegative(self, small_pop):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 20, 10)
+        for seq in small_pop:
+            f = fitness_sliding_window(seq, prior)
+            assert f >= 0
+
+    def test_short_sequence(self):
+        g = DEFAULT_ALPHABET[0]
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 100, 10)
+        assert fitness_sliding_window([g], prior) == 0.0
+        assert fitness_sliding_window([], prior) == 0.0
+
+    def test_scores_against_prev_bigrams(self):
+        """Sequences matching prev_bigrams should score higher."""
+        g1, g2, g3 = DEFAULT_ALPHABET[0], DEFAULT_ALPHABET[1], DEFAULT_ALPHABET[2]
+        from collections import Counter
+        prev = Counter({(g1.symbol, g2.symbol): 100, (g2.symbol, g3.symbol): 50})
+        # Sequence with matching bigrams
+        match_seq = [g1, g2, g3]
+        f_match = fitness_sliding_window(match_seq, prev)
+        # Sequence with non-matching bigrams
+        nomatch_seq = [g3, g3, g3]
+        f_nomatch = fitness_sliding_window(nomatch_seq, prev)
+        assert f_match > f_nomatch
+
+    def test_compute_population_fitness_with_prev(self, small_pop):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 20, 10)
+        fitnesses = compute_population_fitness(small_pop, prev_bigrams=prior)
+        assert len(fitnesses) == len(small_pop)
+        assert all(f >= 0 for f in fitnesses)
+
+    def test_sliding_vs_circular_different(self, small_pop):
+        """Sliding window and circular fitness should produce different values."""
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 20, 10)
+        sliding = compute_population_fitness(small_pop, prev_bigrams=prior)
+        circular = compute_population_fitness(small_pop, prev_bigrams=None)
+        # They use different reference bigrams, so values should differ
+        assert sliding != circular
+
+
+class TestEvolveWithSlidingWindow:
+    def test_preserves_pop_size(self, small_pop, rng):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 20, 10)
+        new_pop = evolve_generation(
+            rng, small_pop, DEFAULT_ALPHABET, 0.1, 3, 0.5, 10,
+            prev_bigrams=prior,
+        )
+        assert len(new_pop) == len(small_pop)
+
+    def test_preserves_seq_length(self, small_pop, rng):
+        prior = uniform_bigram_prior(DEFAULT_ALPHABET, 20, 10)
+        new_pop = evolve_generation(
+            rng, small_pop, DEFAULT_ALPHABET, 0.1, 3, 0.5, 10,
+            prev_bigrams=prior,
+        )
+        for seq in new_pop:
+            assert len(seq) == 10
+
+    def test_multi_generation_sliding(self):
+        """Run multiple generations with sliding window — smoke test."""
+        rng = np.random.default_rng(42)
+        pop = generate_population(rng, DEFAULT_ALPHABET, 50, 10, 0.5)
+        prev_bigrams = uniform_bigram_prior(DEFAULT_ALPHABET, 50, 10)
+
+        for _ in range(20):
+            prev_bigrams = bigram_frequencies(pop)
+            pop = evolve_generation(
+                rng, pop, DEFAULT_ALPHABET, 0.1, 3, 0.5, 10,
+                prev_bigrams=prev_bigrams,
+            )
+        assert len(pop) == 50
+        assert all(len(seq) == 10 for seq in pop)

@@ -43,3 +43,6 @@ class GlyphDriftConfig:
 
     # Grammar detection (v5+)
     track_grammar: bool = False
+
+    # Non-circular fitness (v6+)
+    use_sliding_window: bool = False
