@@ -46,3 +46,6 @@ class GlyphDriftConfig:
 
     # Non-circular fitness (v6+)
     use_sliding_window: bool = False
+
+    # Alphabet selection (v7+)
+    alphabet_name: str = "alchemical"

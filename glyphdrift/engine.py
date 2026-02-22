@@ -19,6 +19,7 @@ from .evolution import (
 )
 from .glyph import DEFAULT_ALPHABET, Glyph, generate_population
 from .grammar import grammar_summary
+from .hieroglyphs import get_alphabet
 from .lexicon import Lexicon, generate_structured_population, template_adherence_rate
 from .metrics import GenerationMetrics, RunMetrics, compute_generation_metrics
 
@@ -27,12 +28,15 @@ def _generate_pop(
     rng: np.random.Generator,
     config: GlyphDriftConfig,
     lexicon: Lexicon | None,
+    alphabet: list[Glyph] | None = None,
 ) -> tuple[list[list[Glyph]], list[str] | None, float]:
     """Generate a population using the appropriate method.
 
     Returns (population, dialect_assignments, mean_foreign_frac).
     dialect_assignments and mean_foreign_frac are None/0.0 when not using dialects.
     """
+    alpha = alphabet if alphabet is not None else DEFAULT_ALPHABET
+
     if config.use_dialects:
         pop, assignments, foreign_frac = generate_dialect_population(
             rng, DEFAULT_DIALECTS, config.population_size,
@@ -48,7 +52,7 @@ def _generate_pop(
         return pop, None, 0.0
 
     pop = generate_population(
-        rng, DEFAULT_ALPHABET, config.population_size,
+        rng, alpha, config.population_size,
         config.sequence_length, config.entropy,
     )
     return pop, None, 0.0
@@ -65,8 +69,11 @@ def run_simulation(
     rng = np.random.default_rng(config.seed)
     lexicon = Lexicon() if config.use_lexicon else None
 
+    # v7: Select alphabet based on config
+    alphabet = get_alphabet(config.alphabet_name)
+
     # Generate initial population
-    population, dialect_assignments, foreign_frac = _generate_pop(rng, config, lexicon)
+    population, dialect_assignments, foreign_frac = _generate_pop(rng, config, lexicon, alphabet)
 
     gen_metrics: list[GenerationMetrics] = []
     foreign_fracs: list[float] = []
@@ -95,7 +102,7 @@ def run_simulation(
     prev_bigrams = None
     if config.use_sliding_window and config.use_evolution:
         prev_bigrams = uniform_bigram_prior(
-            DEFAULT_ALPHABET, config.population_size, config.sequence_length,
+            alphabet, config.population_size, config.sequence_length,
         )
 
     for gen in range(n_gens):
@@ -121,7 +128,7 @@ def run_simulation(
 
             # Evolve to next generation (using prev gen's bigrams, NOT current)
             population = evolve_generation(
-                rng, population, DEFAULT_ALPHABET,
+                rng, population, alphabet,
                 mut_rate, config.tournament_size,
                 config.crossover_rate, config.sequence_length,
                 prev_bigrams if config.use_sliding_window else None,
@@ -134,7 +141,7 @@ def run_simulation(
         else:
             # No evolution: regenerate each generation (i.i.d. sampling)
             population, dialect_assignments, foreign_frac = _generate_pop(
-                rng, config, lexicon,
+                rng, config, lexicon, alphabet,
             )
 
     # Final generation metrics

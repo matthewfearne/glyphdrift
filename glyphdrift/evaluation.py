@@ -132,6 +132,7 @@ def evaluate(
             storm_interval=config.storm_interval,
             track_grammar=config.track_grammar,
             use_sliding_window=config.use_sliding_window,
+            alphabet_name=config.alphabet_name,
         )
         run = run_simulation(cfg, scenario=scenario_name)
         all_runs.append(run)
