@@ -482,3 +482,76 @@ All scenarios use sliding window fitness + chaotic drift (r=3.9) + grammar track
    structure, not symbol identity.
 
 ---
+
+## v8 — Communication Protocol Export + ChaosPot Bridge
+
+**Adds:** Protocol export system that converts evolved GlyphDrift populations into
+communication protocols. Each protocol captures the top 10 bigrams (vocabulary),
+glyph frequency distribution, and compression signature. Protocols from independent
+evolutionary runs have low Jaccard similarity (~11%), while same-run protocols match
+perfectly. ChaosPot integration via `ProtocolManager` enables in-group cooperation
+bias based on evolved linguistic similarity.
+
+### GlyphDrift Side (protocol.py)
+
+- `CommunicationProtocol` dataclass with top bigrams, weights, glyph frequencies
+- `export_protocol(population)` — extracts vocabulary from evolved population
+- `protocol_similarity()` — Jaccard overlap of top bigram sets
+- `save_protocols()` / `load_protocols()` — JSON serialization
+- `scripts/generate_protocols.py` — runs 4 independent evolutions, exports to JSON
+
+### Protocol Generation Results (4 independent runs, seeds 100-400)
+
+```
+Similarity matrix:
+  P0: 1.000 0.111 0.111 0.053
+  P1: 0.111 1.000 0.111 0.176
+  P2: 0.111 0.111 1.000 0.111
+  P3: 0.053 0.176 0.111 1.000
+```
+
+Each protocol evolved its own vocabulary — only ~11% bigram overlap between independent
+runs. This confirms the evolutionary dynamics produce genuinely DIVERGENT languages from
+identical starting conditions, making protocols useful as identity markers.
+
+### ChaosPot Side (agents/digisoup/communication.py)
+
+- `GlyphProtocol` dataclass (frozen, lightweight — no numpy dependency)
+- `cooperation_boost(agent, neighbor, strength)` — maps similarity to [-0.15, +0.15]
+  cooperation adjustment. Same protocol → boost. Different → slight penalty.
+- `ProtocolManager` — assigns protocols to agents, computes pairwise boosts
+- `load_glyph_protocols(path)` — loads from GlyphDrift-exported JSON
+
+### Integration Design
+
+The HiveMemory shared memory system is the integration point:
+1. Each agent gets a `protocol_id` at construction
+2. `ProtocolManager` tracks agent-protocol assignments
+3. When agents detect neighbors, `compute_boost()` adjusts cooperation_tendency
+4. Same-protocol agents cooperate more readily (in-group bias)
+5. Different-protocol agents are slightly less cooperative (out-group wariness)
+
+### Observations
+
+1. **Protocol divergence is robust.** 4 independent evolutions from identical parameters
+   produce ~11% bigram overlap (Jaccard). This is well below the 50% threshold where
+   cooperation boost would be neutral. Independent evolutionary lineages develop
+   genuinely different "languages."
+
+2. **The bridge is alphabet-agnostic.** Since v7 proved symbol identity doesn't matter,
+   the protocol similarity metric (Jaccard on bigrams) works regardless of which
+   Unicode characters the protocols use. Two protocols using different alphabets but
+   similar bigram structures would be recognized as "similar."
+
+3. **Cooperation boost is symmetric.** If A boosts cooperation with B, B equally boosts
+   with A. This prevents exploitation asymmetries.
+
+4. **The boost is modest by design.** At default strength (0.3), same-protocol agents
+   get +0.15 cooperation boost, different-protocol get -0.09 penalty. This creates
+   measurable in-group bias without overwhelming the base agent dynamics.
+
+5. **Next steps for live testing:** Deploy to MeltingPot with commons_harvest or
+   prisoner's_dilemma substrates. Run A/B: boost=0.3 vs boost=0.0 (control).
+   Measure: per-agent reward, cooperation rate, type diversity, Gini coefficient.
+
+---
